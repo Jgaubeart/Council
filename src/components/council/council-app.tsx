@@ -9,6 +9,7 @@ import {
 import { useCouncilSpeech } from "@/hooks/use-council-speech";
 import { useCouncilTranscription } from "@/hooks/use-council-transcription";
 import { useCouncilRouting } from "@/hooks/use-council-routing";
+import { useCouncilDepartments } from "@/hooks/use-council-departments";
 import { ConversationBar } from "./conversation-bar";
 import { CouncilView } from "./council-view";
 import { DevStateSwitcher } from "./dev-state-switcher";
@@ -19,12 +20,20 @@ export function CouncilApp() {
   const [overrideState, setOverrideState] = useState<VisualState | null>(null);
   const speech = useCouncilSpeech();
   const transcription = useCouncilTranscription();
-  const routing = useCouncilRouting(transcription.finalTranscript, speech);
+  const routing = useCouncilRouting(transcription.finalTranscript);
+  const departmentRun = useCouncilDepartments(
+    routing,
+    transcription.finalTranscript,
+    speech,
+  );
 
   const states = useMemo(
     () => {
       const selectedDepartmentIds = new Set<RoutableDepartmentId>(
         routing.departments,
+      );
+      const failedDepartmentIds = new Set<RoutableDepartmentId>(
+        Object.keys(departmentRun.errors) as RoutableDepartmentId[],
       );
       const entries = departments.map((department) => {
         let state = overrideState ?? department.defaultVisualState;
@@ -48,7 +57,35 @@ export function CouncilApp() {
             }
           }
         } else {
-          if (speech.activeDepartmentId === department.id) {
+          const departmentId = department.id as RoutableDepartmentId;
+
+          if (failedDepartmentIds.has(departmentId)) {
+            state = "warning";
+          } else if (selectedDepartmentIds.has(departmentId)) {
+            if (departmentRun.status === "thinking") {
+              state = "thinking";
+            } else if (departmentRun.status === "speaking") {
+              if (speech.activeDepartmentId === department.id) {
+                if (speech.phase === "loading") {
+                  state = "thinking";
+                } else if (speech.phase === "speaking") {
+                  state = "speaking";
+                } else if (speech.phase === "error") {
+                  state = "warning";
+                } else {
+                  state = "waiting";
+                }
+              } else {
+                state = "waiting";
+              }
+            } else if (departmentRun.status === "complete") {
+              state = "available";
+            } else if (departmentRun.status === "error") {
+              state = "warning";
+            } else {
+              state = "waiting";
+            }
+          } else if (speech.activeDepartmentId === department.id) {
             if (speech.phase === "loading") {
               state = "thinking";
             }
@@ -60,10 +97,6 @@ export function CouncilApp() {
             if (speech.phase === "error") {
               state = "warning";
             }
-          } else if (
-            selectedDepartmentIds.has(department.id as RoutableDepartmentId)
-          ) {
-            state = "waiting";
           }
         }
 
@@ -79,6 +112,8 @@ export function CouncilApp() {
       transcription.isListening,
       routing.status,
       routing.departments,
+      departmentRun.status,
+      departmentRun.errors,
     ],
   );
 
@@ -101,10 +136,19 @@ export function CouncilApp() {
           departments={routing.departments}
           routingStatus={routing.status}
           routingError={routing.error}
+          responses={departmentRun.results}
+          departmentErrors={departmentRun.errors}
+          departmentStatus={departmentRun.status}
+          councilError={departmentRun.councilError}
         />
       </div>
 
-      <ConversationBar speech={speech} transcription={transcription} />
+      <ConversationBar
+        speech={speech}
+        transcription={transcription}
+        departmentStatus={departmentRun.status}
+        departmentCouncilError={departmentRun.councilError}
+      />
     </div>
   );
 }

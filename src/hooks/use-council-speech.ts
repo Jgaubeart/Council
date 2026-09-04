@@ -12,6 +12,13 @@ import {
 
 export type SpeechPhase = "idle" | "loading" | "speaking" | "error";
 
+export class SpeechSupersededError extends Error {
+  constructor() {
+    super("Speech was superseded.");
+    this.name = "SpeechSupersededError";
+  }
+}
+
 interface SpeechTranscript {
   departmentId: DepartmentId;
   text: string;
@@ -25,7 +32,7 @@ export interface CouncilSpeechController {
   isMuted: boolean;
   isBusy: boolean;
   playDemo: () => void;
-  speakLine: (line: CouncilScriptLine) => void;
+  speak: (line: CouncilScriptLine) => Promise<void>;
   stop: () => void;
   replay: () => void;
   toggleMute: () => void;
@@ -151,47 +158,66 @@ export function useCouncilSpeech(): CouncilSpeechController {
     const controller = new AbortController();
     abortRef.current = controller;
 
+    let objectUrl: string | null = null;
+
     try {
-      const objectUrl = await fetchSpeech(line, controller.signal);
+      objectUrl = await fetchSpeech(line, controller.signal);
 
       if (runId !== runIdRef.current) {
-        URL.revokeObjectURL(objectUrl);
-        return;
+        throw new SpeechSupersededError();
       }
 
       audio.src = objectUrl;
       await audio.play();
 
       if (runId !== runIdRef.current) {
-        return;
+        throw new SpeechSupersededError();
       }
 
       setPhase("speaking");
       await waitForAudioEnd(audio);
 
       if (runId !== runIdRef.current) {
-        return;
+        throw new SpeechSupersededError();
+      }
+    } catch (error) {
+      if (
+        runId !== runIdRef.current ||
+        error instanceof SpeechSupersededError
+      ) {
+        throw new SpeechSupersededError();
       }
 
-      URL.revokeObjectURL(objectUrl);
-    } catch (playbackError) {
-      if (runId !== runIdRef.current || controller.signal.aborted) {
-        return;
+      throw error;
+    } finally {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
       }
-
-      setPhase("error");
-      setError(
-        playbackError instanceof Error
-          ? playbackError.message
-          : "Speech generation failed.",
-      );
     }
   };
 
   const runQueue = async (runId: number) => {
     while (queueRef.current.length > 0 && runId === runIdRef.current) {
       const line = queueRef.current[0];
-      await playLine(line, runId);
+
+      try {
+        await playLine(line, runId);
+      } catch (playbackError) {
+        if (
+          runId !== runIdRef.current ||
+          playbackError instanceof SpeechSupersededError
+        ) {
+          return;
+        }
+
+        setPhase("error");
+        setError(
+          playbackError instanceof Error
+            ? playbackError.message
+            : "Speech generation failed.",
+        );
+        return;
+      }
 
       if (runId !== runIdRef.current) {
         return;
@@ -229,6 +255,48 @@ export function useCouncilSpeech(): CouncilSpeechController {
     void runQueue(runId);
   };
 
+  const speak = async (line: CouncilScriptLine): Promise<void> => {
+    runIdRef.current += 1;
+    const runId = runIdRef.current;
+    abortRef.current?.abort();
+
+    const audio = getAudio();
+    audio.pause();
+
+    if (audio.src) {
+      URL.revokeObjectURL(audio.src);
+      audio.removeAttribute("src");
+    }
+
+    queueRef.current = [];
+    setActiveDepartmentId(null);
+    setTranscript(null);
+    setError(null);
+    setPhase("idle");
+
+    try {
+      await playLine(line, runId);
+    } catch (speechError) {
+      if (speechError instanceof SpeechSupersededError) {
+        throw speechError;
+      }
+
+      setPhase("error");
+      setError(
+        speechError instanceof Error
+          ? speechError.message
+          : "Speech generation failed.",
+      );
+      throw speechError;
+    }
+
+    if (runId === runIdRef.current) {
+      setActiveDepartmentId(null);
+      setTranscript(null);
+      setPhase("idle");
+    }
+  };
+
   const stop = () => {
     runIdRef.current += 1;
     abortRef.current?.abort();
@@ -259,7 +327,7 @@ export function useCouncilSpeech(): CouncilSpeechController {
     isMuted,
     isBusy: phase === "loading" || phase === "speaking",
     playDemo: () => start(councilScript),
-    speakLine: (line) => start([line]),
+    speak,
     stop,
     replay: () => start(councilScript),
     toggleMute: () => setIsMuted((current) => !current),

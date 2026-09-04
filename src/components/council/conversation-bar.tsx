@@ -8,6 +8,7 @@ import {
 } from "@/config/council";
 import type { CouncilSpeechController } from "@/hooks/use-council-speech";
 import type { CouncilTranscriptionController } from "@/hooks/use-council-transcription";
+import type { DepartmentRunStatus } from "@/hooks/use-council-departments";
 import {
   CancelIcon,
   MicIcon,
@@ -19,6 +20,8 @@ import {
 interface ConversationBarProps {
   speech: CouncilSpeechController;
   transcription: CouncilTranscriptionController;
+  departmentStatus: DepartmentRunStatus;
+  departmentCouncilError: string | null;
 }
 
 const departmentNameById = new Map(
@@ -70,6 +73,8 @@ function ControlButton({
 export function ConversationBar({
   speech,
   transcription,
+  departmentStatus,
+  departmentCouncilError,
 }: ConversationBarProps) {
   const [mode, setMode] = useState<ConversationMode>("council");
   const speakerName = speech.transcript
@@ -167,6 +172,14 @@ export function ConversationBar({
                 </p>
               ) : null}
             </div>
+          ) : departmentCouncilError ? (
+            <p className="truncate text-sm text-rose-600">
+              {departmentCouncilError}
+            </p>
+          ) : departmentStatus === "thinking" ? (
+            <p className="truncate text-sm text-zinc-500">
+              Departments are thinking…
+            </p>
           ) : speech.error ? (
             <p className="truncate text-sm text-rose-600">{speech.error}</p>
           ) : speech.transcript && speakerName ? (

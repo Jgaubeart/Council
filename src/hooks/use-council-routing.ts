@@ -1,11 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  departments,
-  type RoutableDepartmentId,
-} from "@/config/council";
-import type { CouncilSpeechController } from "./use-council-speech";
+import type { RoutableDepartmentId } from "@/config/council";
 import {
   parseCouncilRouteResult,
   type CouncilResponseMode,
@@ -19,31 +15,12 @@ export interface CouncilRoutingController {
   departments: RoutableDepartmentId[];
   responseMode: CouncilResponseMode | null;
   error: string | null;
-}
-
-const departmentNameById = new Map(
-  departments.map((department) => [department.id, department.name]),
-);
-
-function buildCouncilIntro(departmentIds: RoutableDepartmentId[]): string {
-  const names = departmentIds.map(
-    (departmentId) => departmentNameById.get(departmentId) ?? departmentId,
-  );
-
-  if (names.length === 1) {
-    return `I'm bringing in ${names[0]}.`;
-  }
-
-  if (names.length === 2) {
-    return `I'm bringing in ${names[0]} and ${names[1]}.`;
-  }
-
-  return `I'm bringing in ${names[0]}, ${names[1]}, and ${names[2]}.`;
+  sessionId: number;
+  transcript: string;
 }
 
 export function useCouncilRouting(
   finalTranscript: string,
-  speech: CouncilSpeechController,
 ): CouncilRoutingController {
   const [status, setStatus] = useState<CouncilRoutingStatus>("idle");
   const [objective, setObjective] = useState("");
@@ -51,29 +28,26 @@ export function useCouncilRouting(
   const [responseMode, setResponseMode] =
     useState<CouncilResponseMode | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState(0);
+  const [transcript, setTranscript] = useState("");
 
   const requestIdRef = useRef(0);
-  const speechRef = useRef(speech);
 
   useEffect(() => {
-    speechRef.current = speech;
-  }, [speech]);
+    const value = finalTranscript.trim();
 
-  useEffect(() => {
-    const transcript = finalTranscript.trim();
-
-    if (!transcript) {
+    if (!value) {
       return;
     }
 
     const requestId = ++requestIdRef.current;
-    speechRef.current.stop();
 
     const route = async () => {
       setStatus("thinking");
       setObjective("");
       setDepartments([]);
       setResponseMode(null);
+      setTranscript("");
       setError(null);
 
       try {
@@ -82,7 +56,7 @@ export function useCouncilRouting(
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ transcript }),
+          body: JSON.stringify({ transcript: value }),
         });
 
         if (!response.ok) {
@@ -102,12 +76,9 @@ export function useCouncilRouting(
         setObjective(result.objective);
         setDepartments(result.departments);
         setResponseMode(result.responseMode);
+        setTranscript(value);
+        setSessionId((current) => current + 1);
         setStatus("ready");
-
-        speechRef.current.speakLine({
-          departmentId: "council",
-          text: buildCouncilIntro(result.departments),
-        });
       } catch (routingError) {
         if (requestId !== requestIdRef.current) {
           return;
@@ -139,5 +110,7 @@ export function useCouncilRouting(
     departments,
     responseMode,
     error,
+    sessionId,
+    transcript,
   };
 }
