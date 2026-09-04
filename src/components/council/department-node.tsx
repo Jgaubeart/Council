@@ -6,12 +6,14 @@ interface DepartmentNodeProps {
   department: DepartmentDefinition;
   state: VisualState;
   featured?: boolean;
+  active?: boolean;
 }
 
 export function DepartmentNode({
   department,
   state,
   featured = false,
+  active = false,
 }: DepartmentNodeProps) {
   return (
     <article
@@ -24,6 +26,7 @@ export function DepartmentNode({
         initials={department.initials}
         state={state}
         size={featured ? "lg" : "md"}
+        active={active}
       />
       <div className="flex flex-col items-center gap-1">
         <h2

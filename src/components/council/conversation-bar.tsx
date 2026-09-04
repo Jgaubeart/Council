@@ -3,58 +3,128 @@
 import { useState, type ReactNode } from "react";
 import {
   conversationModes,
+  departments,
   type ConversationMode,
 } from "@/config/council";
-import { InterruptIcon, MicIcon, MuteIcon } from "./icons";
+import type { CouncilSpeechController } from "@/hooks/use-council-speech";
+import {
+  MuteIcon,
+  PlayIcon,
+  ReplayIcon,
+  StopIcon,
+} from "./icons";
+
+interface ConversationBarProps {
+  speech: CouncilSpeechController;
+}
+
+const departmentNameById = new Map(
+  departments.map((department) => [department.id, department.name]),
+);
 
 function ControlButton({
   label,
   children,
+  onClick,
+  disabled = false,
+  active = false,
   variant = "default",
 }: {
   label: string;
   children: ReactNode;
-  variant?: "default" | "danger";
+  onClick: () => void;
+  disabled?: boolean;
+  active?: boolean;
+  variant?: "default" | "primary" | "danger";
 }) {
-  const styles =
-    variant === "danger"
-      ? "text-zinc-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
-      : "text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900";
+  const variantClasses =
+    variant === "primary"
+      ? "border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800"
+      : variant === "danger"
+        ? "text-zinc-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+        : "text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900";
 
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
-      className={`flex h-11 w-11 items-center justify-center rounded-full border border-zinc-200/80 bg-white text-zinc-500 transition-colors ${styles}`}
+      aria-pressed={active}
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex h-11 items-center justify-center gap-2 rounded-full border border-zinc-200/80 bg-white px-3.5 text-sm font-medium text-zinc-600 transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+        active
+          ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+          : variantClasses
+      }`}
     >
       {children}
+      <span className="hidden sm:inline">{label}</span>
     </button>
   );
 }
 
-export function ConversationBar() {
+export function ConversationBar({ speech }: ConversationBarProps) {
   const [mode, setMode] = useState<ConversationMode>("council");
+  const speakerName = speech.transcript
+    ? (departmentNameById.get(speech.transcript.departmentId) ?? "Council")
+    : null;
 
   return (
     <section className="shrink-0 border-t border-zinc-200/80 bg-white/95 px-6 py-4 backdrop-blur sm:px-8">
       <div className="mx-auto flex max-w-6xl flex-col gap-4 lg:flex-row lg:items-center">
-        <div className="flex items-center gap-3">
-          <ControlButton label="Microphone">
-            <MicIcon className="h-5 w-5" />
+        <div className="flex flex-wrap items-center gap-2">
+          <ControlButton
+            label="Play Demo"
+            variant="primary"
+            onClick={speech.playDemo}
+            disabled={speech.isBusy}
+          >
+            <PlayIcon className="h-5 w-5" />
           </ControlButton>
-          <ControlButton label="Mute">
+          <ControlButton label="Stop" onClick={speech.stop}>
+            <StopIcon className="h-5 w-5" />
+          </ControlButton>
+          <ControlButton
+            label={speech.isMuted ? "Unmute" : "Mute"}
+            onClick={speech.toggleMute}
+            active={speech.isMuted}
+          >
             <MuteIcon className="h-5 w-5" />
           </ControlButton>
-          <ControlButton label="Interrupt" variant="danger">
-            <InterruptIcon className="h-5 w-5" />
+          <ControlButton
+            label="Replay"
+            onClick={speech.replay}
+            disabled={speech.isBusy}
+          >
+            <ReplayIcon className="h-5 w-5" />
           </ControlButton>
         </div>
 
         <div className="min-w-0 flex-1 rounded-2xl border border-zinc-200/80 bg-zinc-50/80 px-4 py-3">
-          <p className="truncate text-sm text-zinc-400">
-            Ask Council anything about the business...
-          </p>
+          {speech.error ? (
+            <p className="truncate text-sm text-rose-600">{speech.error}</p>
+          ) : speech.transcript && speakerName ? (
+            <div className="min-w-0 text-sm">
+              <div className="flex items-baseline gap-2">
+                <span className="shrink-0 font-medium text-zinc-700">
+                  {speakerName}
+                </span>
+                <span className="truncate text-zinc-500">
+                  {speech.transcript.text}
+                </span>
+              </div>
+              {speech.phase === "loading" ? (
+                <p className="mt-1 text-xs text-zinc-400">
+                  Preparing speech…
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="truncate text-sm text-zinc-400">
+              Ask Council anything about the business...
+            </p>
+          )}
         </div>
 
         <div

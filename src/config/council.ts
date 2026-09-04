@@ -16,6 +16,7 @@ export interface DepartmentDefinition {
   name: string;
   role: string;
   initials: string;
+  voice: string;
   kind: DepartmentKind;
   defaultVisualState: VisualState;
 }
@@ -26,6 +27,7 @@ export const departments: DepartmentDefinition[] = [
     name: "Council",
     role: "Orchestrator",
     initials: "CG",
+    voice: "onyx",
     kind: "orchestrator",
     defaultVisualState: "available",
   },
@@ -34,6 +36,7 @@ export const departments: DepartmentDefinition[] = [
     name: "Sales",
     role: "Sales & Client Strategy",
     initials: "SA",
+    voice: "nova",
     kind: "member",
     defaultVisualState: "available",
   },
@@ -42,6 +45,7 @@ export const departments: DepartmentDefinition[] = [
     name: "Finance",
     role: "Financial Analysis",
     initials: "FI",
+    voice: "alloy",
     kind: "member",
     defaultVisualState: "available",
   },
@@ -50,6 +54,7 @@ export const departments: DepartmentDefinition[] = [
     name: "Operations",
     role: "Operations & Production",
     initials: "OP",
+    voice: "echo",
     kind: "member",
     defaultVisualState: "available",
   },

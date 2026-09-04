@@ -5,6 +5,7 @@ import {
   departments,
   type VisualState,
 } from "@/config/council";
+import { useCouncilSpeech } from "@/hooks/use-council-speech";
 import { ConversationBar } from "./conversation-bar";
 import { CouncilView } from "./council-view";
 import { DevStateSwitcher } from "./dev-state-switcher";
@@ -13,16 +14,33 @@ import { RightSidebar } from "./right-sidebar";
 
 export function CouncilApp() {
   const [overrideState, setOverrideState] = useState<VisualState | null>(null);
+  const speech = useCouncilSpeech();
 
   const states = useMemo(
-    () =>
-      Object.fromEntries(
-        departments.map((department) => [
-          department.id,
-          overrideState ?? department.defaultVisualState,
-        ]),
-      ) as Record<string, VisualState>,
-    [overrideState],
+    () => {
+      const entries = departments.map((department) => {
+        let state = overrideState ?? department.defaultVisualState;
+
+        if (speech.activeDepartmentId === department.id) {
+          if (speech.phase === "loading") {
+            state = "thinking";
+          }
+
+          if (speech.phase === "speaking") {
+            state = "speaking";
+          }
+
+          if (speech.phase === "error") {
+            state = "warning";
+          }
+        }
+
+        return [department.id, state] as const;
+      });
+
+      return Object.fromEntries(entries) as Record<string, VisualState>;
+    },
+    [overrideState, speech.activeDepartmentId, speech.phase],
   );
 
   return (
@@ -31,7 +49,10 @@ export function CouncilApp() {
 
       <div className="flex min-h-0 flex-1">
         <main className="relative min-w-0 flex-1">
-          <CouncilView states={states} />
+          <CouncilView
+            states={states}
+            activeDepartmentId={speech.activeDepartmentId}
+          />
           {process.env.NODE_ENV === "development" ? (
             <DevStateSwitcher value={overrideState} onChange={setOverrideState} />
           ) : null}
@@ -39,7 +60,7 @@ export function CouncilApp() {
         <RightSidebar />
       </div>
 
-      <ConversationBar />
+      <ConversationBar speech={speech} />
     </div>
   );
 }

@@ -8,6 +8,7 @@ interface CouncilAvatarProps {
   initials: string;
   state: VisualState;
   size?: AvatarSize;
+  active?: boolean;
 }
 
 const sizeClasses: Record<AvatarSize, string> = {
@@ -27,14 +28,19 @@ export function CouncilAvatar({
   initials,
   state,
   size = "md",
+  active = false,
 }: CouncilAvatarProps) {
   const meta = visualStateMeta[state];
 
   return (
     <div
-      className="relative"
+      className={`relative rounded-full ${
+        active
+          ? "ring-2 ring-indigo-300 ring-offset-4 ring-offset-[#f6f6f4]"
+          : ""
+      }`}
       role="img"
-      aria-label={`${name} avatar, ${meta.label}`}
+      aria-label={`${name} avatar, ${meta.label}${active ? ", active" : ""}`}
     >
       <div
         className={`${sizeClasses[size]} flex items-center justify-center rounded-full border border-zinc-200/80 bg-white text-zinc-700 shadow-sm ring-1 ring-inset ${meta.avatarRing}`}
