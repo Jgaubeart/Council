@@ -7,15 +7,18 @@ import {
   type ConversationMode,
 } from "@/config/council";
 import type { CouncilSpeechController } from "@/hooks/use-council-speech";
+import type { CouncilTranscriptionController } from "@/hooks/use-council-transcription";
 import {
+  CancelIcon,
+  MicIcon,
   MuteIcon,
-  PlayIcon,
   ReplayIcon,
   StopIcon,
 } from "./icons";
 
 interface ConversationBarProps {
   speech: CouncilSpeechController;
+  transcription: CouncilTranscriptionController;
 }
 
 const departmentNameById = new Map(
@@ -64,26 +67,62 @@ function ControlButton({
   );
 }
 
-export function ConversationBar({ speech }: ConversationBarProps) {
+export function ConversationBar({
+  speech,
+  transcription,
+}: ConversationBarProps) {
   const [mode, setMode] = useState<ConversationMode>("council");
   const speakerName = speech.transcript
     ? (departmentNameById.get(speech.transcript.departmentId) ?? "Council")
     : null;
+
+  const micText =
+    transcription.partialTranscript || transcription.finalTranscript;
+  const micActive =
+    transcription.status === "listening" ||
+    transcription.status === "finalizing";
+  const micBlocked =
+    transcription.status === "requesting_permission" ||
+    transcription.status === "connecting";
+  const talkDisabled =
+    micBlocked ||
+    transcription.status === "listening" ||
+    transcription.status === "finalizing";
+
+  const handleTalk = () => {
+    speech.stop();
+    transcription.startListening();
+  };
 
   return (
     <section className="shrink-0 border-t border-zinc-200/80 bg-white/95 px-6 py-4 backdrop-blur sm:px-8">
       <div className="mx-auto flex max-w-6xl flex-col gap-4 lg:flex-row lg:items-center">
         <div className="flex flex-wrap items-center gap-2">
           <ControlButton
-            label="Play Demo"
+            label="Talk to Council"
             variant="primary"
-            onClick={speech.playDemo}
-            disabled={speech.isBusy}
+            onClick={handleTalk}
+            disabled={talkDisabled}
+            active={micActive}
           >
-            <PlayIcon className="h-5 w-5" />
+            <MicIcon className="h-5 w-5" />
           </ControlButton>
-          <ControlButton label="Stop" onClick={speech.stop}>
+          <ControlButton
+            label="Stop Listening"
+            onClick={transcription.stopListening}
+            disabled={
+              transcription.status !== "listening" &&
+              transcription.status !== "finalizing"
+            }
+          >
             <StopIcon className="h-5 w-5" />
+          </ControlButton>
+          <ControlButton
+            label="Cancel"
+            onClick={transcription.cancel}
+            disabled={transcription.status === "idle"}
+          >
+            <CancelIcon className="h-5 w-5" />
           </ControlButton>
           <ControlButton
             label={speech.isMuted ? "Unmute" : "Mute"}
@@ -93,16 +132,42 @@ export function ConversationBar({ speech }: ConversationBarProps) {
             <MuteIcon className="h-5 w-5" />
           </ControlButton>
           <ControlButton
-            label="Replay"
+            label="Replay Demo"
             onClick={speech.replay}
-            disabled={speech.isBusy}
+            disabled={speech.isBusy || transcription.isListening}
           >
             <ReplayIcon className="h-5 w-5" />
           </ControlButton>
         </div>
 
         <div className="min-w-0 flex-1 rounded-2xl border border-zinc-200/80 bg-zinc-50/80 px-4 py-3">
-          {speech.error ? (
+          {transcription.error ? (
+            <p className="truncate text-sm text-rose-600">
+              {transcription.error}
+            </p>
+          ) : transcription.status === "requesting_permission" ? (
+            <p className="truncate text-sm text-zinc-500">
+              Requesting microphone permission…
+            </p>
+          ) : transcription.status === "connecting" ? (
+            <p className="truncate text-sm text-zinc-500">
+              Connecting to transcription…
+            </p>
+          ) : micActive || transcription.finalTranscript ? (
+            <div className="min-w-0 text-sm">
+              <div className="flex items-baseline gap-2">
+                <span className="shrink-0 font-medium text-zinc-700">You</span>
+                <span className="truncate text-zinc-500">
+                  {micText || "Listening…"}
+                </span>
+              </div>
+              {transcription.status === "finalizing" ? (
+                <p className="mt-1 text-xs text-zinc-400">
+                  Finalizing transcript…
+                </p>
+              ) : null}
+            </div>
+          ) : speech.error ? (
             <p className="truncate text-sm text-rose-600">{speech.error}</p>
           ) : speech.transcript && speakerName ? (
             <div className="min-w-0 text-sm">
