@@ -102,6 +102,21 @@ export function useCouncilTranscription(): CouncilTranscriptionController {
     streamRef.current = null;
   };
 
+  const finalizeTurn = () => {
+    clearFinalizeTimeout();
+
+    const partial = partialRef.current.trim();
+    if (!finalRef.current && partial) {
+      finalRef.current = partial;
+      setFinalTranscript(partial);
+    }
+
+    partialRef.current = "";
+    setPartialTranscript("");
+    resetResources();
+    setStatus("idle");
+  };
+
   const handleMessage = (
     event: MessageEvent<string>,
     runId: number,
@@ -147,9 +162,7 @@ export function useCouncilTranscription(): CouncilTranscriptionController {
       setPartialTranscript("");
 
       if (finalizingRef.current) {
-        clearFinalizeTimeout();
-        resetResources();
-        setStatus("idle");
+        finalizeTurn();
       }
 
       return;
@@ -157,6 +170,12 @@ export function useCouncilTranscription(): CouncilTranscriptionController {
 
     if (message.type === "error") {
       const errorEvent = message as RealtimeErrorEvent;
+
+      if (finalizingRef.current) {
+        finalizeTurn();
+        return;
+      }
+
       setError(errorEvent.error?.message ?? "Realtime transcription failed.");
       setStatus("error");
       resetResources();
@@ -255,12 +274,13 @@ export function useCouncilTranscription(): CouncilTranscriptionController {
       await peer.setLocalDescription(offer);
 
       const sdpResponse = await fetch(
-        "https://api.openai.com/v1/realtime/transcription_sessions?model=gpt-4o-mini-transcribe",
+        "https://api.openai.com/v1/realtime/calls",
         {
           method: "POST",
           headers: {
             Authorization: `Bearer ${sessionPayload.client_secret}`,
             "Content-Type": "application/sdp",
+            Accept: "application/sdp",
           },
           body: offer.sdp,
         },
@@ -301,6 +321,11 @@ export function useCouncilTranscription(): CouncilTranscriptionController {
     finalizingRef.current = true;
     setStatus("finalizing");
 
+    const dataChannel = dataChannelRef.current;
+    if (dataChannel && dataChannel.readyState === "open") {
+      dataChannel.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+    }
+
     streamRef.current?.getAudioTracks().forEach((track) => track.stop());
 
     clearFinalizeTimeout();
@@ -309,17 +334,7 @@ export function useCouncilTranscription(): CouncilTranscriptionController {
         return;
       }
 
-      const partial = partialRef.current.trim();
-
-      if (!finalRef.current && partial) {
-        finalRef.current = partial;
-        setFinalTranscript(partial);
-      }
-
-      partialRef.current = "";
-      setPartialTranscript("");
-      resetResources();
-      setStatus("idle");
+      finalizeTurn();
     }, 1800);
   };
 

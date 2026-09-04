@@ -3,10 +3,12 @@
 import { useMemo, useState } from "react";
 import {
   departments,
+  type RoutableDepartmentId,
   type VisualState,
 } from "@/config/council";
 import { useCouncilSpeech } from "@/hooks/use-council-speech";
 import { useCouncilTranscription } from "@/hooks/use-council-transcription";
+import { useCouncilRouting } from "@/hooks/use-council-routing";
 import { ConversationBar } from "./conversation-bar";
 import { CouncilView } from "./council-view";
 import { DevStateSwitcher } from "./dev-state-switcher";
@@ -17,31 +19,52 @@ export function CouncilApp() {
   const [overrideState, setOverrideState] = useState<VisualState | null>(null);
   const speech = useCouncilSpeech();
   const transcription = useCouncilTranscription();
+  const routing = useCouncilRouting(transcription.finalTranscript, speech);
 
   const states = useMemo(
     () => {
+      const selectedDepartmentIds = new Set<RoutableDepartmentId>(
+        routing.departments,
+      );
       const entries = departments.map((department) => {
         let state = overrideState ?? department.defaultVisualState;
 
-        if (speech.activeDepartmentId === department.id) {
-          if (speech.phase === "loading") {
+        if (department.kind === "orchestrator") {
+          if (transcription.isListening) {
+            state = "listening";
+          } else if (routing.status === "thinking") {
             state = "thinking";
-          }
+          } else if (speech.activeDepartmentId === department.id) {
+            if (speech.phase === "loading") {
+              state = "thinking";
+            }
 
-          if (speech.phase === "speaking") {
-            state = "speaking";
-          }
+            if (speech.phase === "speaking") {
+              state = "speaking";
+            }
 
-          if (speech.phase === "error") {
-            state = "warning";
+            if (speech.phase === "error") {
+              state = "warning";
+            }
           }
-        }
+        } else {
+          if (speech.activeDepartmentId === department.id) {
+            if (speech.phase === "loading") {
+              state = "thinking";
+            }
 
-        if (
-          department.kind === "orchestrator" &&
-          transcription.isListening
-        ) {
-          state = "listening";
+            if (speech.phase === "speaking") {
+              state = "speaking";
+            }
+
+            if (speech.phase === "error") {
+              state = "warning";
+            }
+          } else if (
+            selectedDepartmentIds.has(department.id as RoutableDepartmentId)
+          ) {
+            state = "waiting";
+          }
         }
 
         return [department.id, state] as const;
@@ -54,6 +77,8 @@ export function CouncilApp() {
       speech.activeDepartmentId,
       speech.phase,
       transcription.isListening,
+      routing.status,
+      routing.departments,
     ],
   );
 
@@ -71,7 +96,12 @@ export function CouncilApp() {
             <DevStateSwitcher value={overrideState} onChange={setOverrideState} />
           ) : null}
         </main>
-        <RightSidebar />
+        <RightSidebar
+          objective={routing.objective}
+          departments={routing.departments}
+          routingStatus={routing.status}
+          routingError={routing.error}
+        />
       </div>
 
       <ConversationBar speech={speech} transcription={transcription} />

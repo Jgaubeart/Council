@@ -1,5 +1,7 @@
+import type { DepartmentId } from "./council";
+
 export interface CouncilScriptLine {
-  departmentId: string;
+  departmentId: DepartmentId;
   text: string;
 }
 

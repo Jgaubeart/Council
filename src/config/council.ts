@@ -9,10 +9,14 @@ export type VisualState =
 
 export type DepartmentKind = "orchestrator" | "member";
 
+export type DepartmentId = "council" | "sales" | "finance" | "operations";
+
+export type RoutableDepartmentId = Exclude<DepartmentId, "council">;
+
 export type ConversationMode = "council" | "direct" | "summary";
 
 export interface DepartmentDefinition {
-  id: string;
+  id: DepartmentId;
   name: string;
   role: string;
   initials: string;

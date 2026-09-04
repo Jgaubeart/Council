@@ -16,26 +16,28 @@ export async function POST() {
 
   try {
     const client = new OpenAI({ apiKey });
-    const session = await client.beta.realtime.transcriptionSessions.create({
-      input_audio_format: "pcm16",
-      input_audio_transcription: {
-        model: "gpt-4o-mini-transcribe",
-        language: "en",
+    const result = await client.realtime.clientSecrets.create({
+      expires_after: {
+        anchor: "created_at",
+        seconds: 300,
       },
-      turn_detection: {
-        type: "server_vad",
-      },
-      client_secret: {
-        expires_at: {
-          anchor: "created_at",
-          seconds: 300,
+      session: {
+        type: "transcription",
+        audio: {
+          input: {
+            transcription: {
+              model: "gpt-realtime-whisper",
+              language: "en",
+            },
+            turn_detection: null,
+          },
         },
       },
     });
 
     return NextResponse.json({
-      client_secret: session.client_secret.value,
-      expires_at: session.client_secret.expires_at,
+      client_secret: result.value,
+      expires_at: result.expires_at,
     });
   } catch (error) {
     console.error("Failed to create transcription session:", error);

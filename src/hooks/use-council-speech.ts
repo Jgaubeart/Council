@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { departments } from "@/config/council";
+import {
+  departments,
+  type DepartmentId,
+} from "@/config/council";
 import {
   councilScript,
   type CouncilScriptLine,
@@ -10,7 +13,7 @@ import {
 export type SpeechPhase = "idle" | "loading" | "speaking" | "error";
 
 interface SpeechTranscript {
-  departmentId: string;
+  departmentId: DepartmentId;
   text: string;
 }
 
@@ -22,6 +25,7 @@ export interface CouncilSpeechController {
   isMuted: boolean;
   isBusy: boolean;
   playDemo: () => void;
+  speakLine: (line: CouncilScriptLine) => void;
   stop: () => void;
   replay: () => void;
   toggleMute: () => void;
@@ -255,6 +259,7 @@ export function useCouncilSpeech(): CouncilSpeechController {
     isMuted,
     isBusy: phase === "loading" || phase === "speaking",
     playDemo: () => start(councilScript),
+    speakLine: (line) => start([line]),
     stop,
     replay: () => start(councilScript),
     toggleMute: () => setIsMuted((current) => !current),
